@@ -1,0 +1,101 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Stores customized BlockMine player profile, stats, skin customization, daily reward streak, and language preference.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner Firebase Auth UID" },
+        "username": { "type": "string", "description": "Display name (1-40 chars)" },
+        "titleBadge": { "type": "string", "description": "Player title badge (1-50 chars)" },
+        "skinPreset": { "type": "string", "description": "Character skin preset ID" },
+        "hairColorHex": { "type": "string", "description": "Hex color for hair/head" },
+        "tunicColorHex": { "type": "string", "description": "Hex color for tunic/armor" },
+        "pantsColorHex": { "type": "string", "description": "Hex color for pants" },
+        "capeStyle": { "type": "string", "description": "Selected cape style" },
+        "level": { "type": "integer", "description": "Player level" },
+        "xp": { "type": "integer", "description": "Total experience points" },
+        "coins": { "type": "integer", "description": "Gold coins balance" },
+        "gems": { "type": "integer", "description": "Emerald/Diamond gems balance" },
+        "dailyStreak": { "type": "integer", "description": "Consecutive daily reward streak" },
+        "lastClaimDay": { "type": "integer", "description": "Epoch day index of last daily reward claim" },
+        "blocksPlaced": { "type": "integer", "description": "Total blocks placed count" },
+        "blocksMined": { "type": "integer", "description": "Total blocks mined count" },
+        "templatesBuilt": { "type": "integer", "description": "Total structural templates spawned" },
+        "languageCode": { "type": "string", "description": "Selected UI language code (tr, en, de, es, ja)" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server creation timestamp via FieldValue.serverTimestamp()" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server update timestamp via FieldValue.serverTimestamp()" }
+      },
+      "required": [
+        "userId",
+        "username",
+        "titleBadge",
+        "skinPreset",
+        "hairColorHex",
+        "tunicColorHex",
+        "pantsColorHex",
+        "capeStyle",
+        "level",
+        "xp",
+        "coins",
+        "gems",
+        "dailyStreak",
+        "lastClaimDay",
+        "blocksPlaced",
+        "blocksMined",
+        "templatesBuilt",
+        "languageCode",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "FriendEntry": {
+      "title": "FriendEntry",
+      "description": "Stores a friend in the player's friend list with online status and server room info.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner Firebase Auth UID" },
+        "friendName": { "type": "string", "description": "Friend display name" },
+        "friendTag": { "type": "string", "description": "Friend unique tag" },
+        "status": { "type": "string", "enum": ["online", "in_game", "offline"], "description": "Current online status" },
+        "serverRoom": { "type": "string", "description": "Active multiplayer server room name" },
+        "skinPreset": { "type": "string", "description": "Friend skin preset" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server creation timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server update timestamp" }
+      },
+      "required": ["userId", "friendName", "friendTag", "status", "serverRoom", "skinPreset", "createdAt", "updatedAt"]
+    },
+    "ServerRoom": {
+      "title": "ServerRoom",
+      "description": "Multiplayer server room metadata and shared world state.",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string", "description": "Creator UID" },
+        "roomName": { "type": "string", "description": "Server display name" },
+        "gameMode": { "type": "string", "enum": ["creative", "survival", "exploration"], "description": "Server mode" },
+        "region": { "type": "string", "description": "Server region code" },
+        "playerCount": { "type": "integer", "description": "Active players in server" },
+        "maxPlayers": { "type": "integer", "description": "Max player capacity" },
+        "memberUids": { "type": "array", "description": "Bounded list (max 10) of member UIDs" },
+        "lastChatMessage": { "type": "string", "description": "Latest chat message in room" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server creation timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server update timestamp" }
+      },
+      "required": ["ownerId", "roomName", "gameMode", "region", "playerCount", "maxPlayers", "memberUids", "lastChatMessage", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Per-user profile, skin customization, daily rewards, and analytics stats."
+    },
+    "/users/{userId}/friends/{friendId}": {
+      "schema": { "$ref": "#/entities/FriendEntry" },
+      "description": "Per-user friend list entries."
+    },
+    "/servers/{serverId}": {
+      "schema": { "$ref": "#/entities/ServerRoom" },
+      "description": "Multiplayer server rooms accessible to room members."
+    }
+  }
+}

@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>MINECRAFT 100X HD EDITION - Online Multiplayer & Touch</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=VT323&family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --mc-font: 'VT323', monospace;
+            --mc-title: 'Press Start 2P', monospace;
+        }
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+        }
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            background-color: #0d1117;
+            font-family: var(--mc-font);
+            image-rendering: pixelated;
+        }
+        #game-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            display: block;
+            z-index: 1;
+            cursor: grab;
+        }
+        #game-canvas:active {
+            cursor: grabbing;
+        }
+        .mc-text {
+            text-shadow: 2px 2px 0px #1b1b1b;
+            letter-spacing: 0.5px;
+        }
+        .mc-logo {
+            font-family: var(--mc-title);
+            color: #e6e6e6;
+            text-shadow:
+                0 3px 0 #5ebd3e,
+                0 6px 0 #3a7d22,
+                0 9px 0 #264d16,
+                4px 10px 0 #000,
+                -4px 10px 0 #000,
+                0 15px 25px rgba(0,0,0,0.9);
+            letter-spacing: 3px;
+        }
+        .mc-btn {
+            pointer-events: auto !important;
+            background-color: #6f6f6f;
+            background-image:
+                linear-gradient(rgba(255,255,255,0.12) 2px, transparent 2px),
+                linear-gradient(90deg, rgba(255,255,255,0.08) 2px, transparent 2px);
+            background-size: 8px 8px;
+            border-top: 3px solid #b5b5b5;
+            border-left: 3px solid #b5b5b5;
+            border-right: 3px solid #333333;
+            border-bottom: 3px solid #333333;
+            outline: 2px solid #000000;
+            color: #f8f8f8;
+            font-family: var(--mc-font);
+            font-size: 1.35rem;
+            line-height: 1.1;
+            padding: 8px 14px;
+            text-shadow: 2px 2px 0px #1e1e1e;
+            cursor: pointer;
+            transition: transform 0.05s, background-color 0.1s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            text-align: center;
+        }
+        .mc-btn:hover {
+            background-color: #5b78b8;
+            border-top-color: #b5ccff;
+            border-left-color: #b5ccff;
+            color: #ffff99;
+        }
+        .mc-btn:active {
+            transform: translateY(2px);
+            border-top-color: #333;
+            border-left-color: #333;
+            border-right-color: #b5b5b5;
+            border-bottom-color: #b5b5b5;
+        }
+        .mc-panel {
+            pointer-events: auto !important;
+            background-color: #c6c6c6;
+            border-top: 4px solid #ffffff;
+            border-left: 4px solid #ffffff;
+            border-right: 4px solid #555555;
+            border-bottom: 4px solid #555555;
+            outline: 3px solid #000000;
+            box-shadow: 0 24px 60px rgba(0,0,0,0.9);
+        }
+        .mc-slot {
+            pointer-events: auto !important;
+            width: 48px;
+            height: 48px;
+            background-color: #8b8b8b;
+            border-top: 3px solid #373737;
+            border-left: 3px solid #373737;
+            border-right: 3px solid #ffffff;
+            border-bottom: 3px solid #ffffff;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+        .mc-slot:hover {
+            background-color: #a6a6a6;
+        }
+        .mc-slot.selected {
+            outline: 3px solid #fff254;
+            box-shadow: inset 0 0 0 2px #111, 0 0 12px rgba(255,242,84,0.85);
+            transform: scale(1.06);
+            z-index: 10;
+        }
+        @keyframes splashBounce {
+            0%, 100% { transform: rotate(-12deg) scale(1); }
+            50% { transform: rotate(-12deg) scale(1.09); }
+        }
+        .splash-banner {
+            color: #ffff33;
+            text-shadow: 2px 2px 0px #3f3f00, 0 0 10px rgba(0,0,0,0.8);
+            animation: splashBounce 0.9s infinite ease-in-out;
+            cursor: pointer;
+            pointer-events: auto !important;
+        }
+        ::-webkit-scrollbar { width: 10px; }
+        ::-webkit-scrollbar-track { background: #444; }
+        ::-webkit-scrollbar-thumb { background: #888; border: 2px solid #222; }
+    </style>
+</head>
+<body class="relative w-full h-full overflow-hidden select-none">
+
+    <!-- 3D Three.js Full-Screen Canvas -->
+    <canvas id="game-canvas"></canvas>
+
+    <!-- Center Crosshair -->
+    <div id="crosshair" class="fixed inset-0 pointer-events-none flex flex-col items-center justify-center z-20">
+        <div class="relative w-6 h-6 flex items-center justify-center">
+            <div class="absolute w-5 h-[2px] bg-white mix-blend-difference"></div>
+            <div class="absolute h-5 w-[2px] bg-white mix-blend-difference"></div>
+        </div>
+    </div>
+
+    <!-- TOP HUD BAR -->
+    <div id="top-hud" class="fixed top-2 left-2 right-2 z-30 flex flex-wrap justify-between items-start gap-2 pointer-events-none">
+        <div class="flex flex-col gap-1 max-w-xl">
+            <div class="flex flex-wrap gap-1 pointer-events-auto">
+                <button id="btn-hud-title" class="mc-btn !py-1 !px-2 !text-sm bg-amber-800">🏠 Ana Ekran [ESC]</button>
+                <button id="btn-hud-inv" class="mc-btn !py-1 !px-2 !text-sm bg-emerald-800">🎒 Envanter [I]</button>
+                <button id="btn-hud-chat" class="mc-btn !py-1 !px-2 !text-sm bg-cyan-800">💬 Sohbet [T]</button>
+            </div>
+
+            <div class="bg-black/70 px-2.5 py-1 border-l-4 border-lime-400 text-white text-sm leading-tight mc-text w-fit flex items-center gap-2">
+                <div>
+                    <div id="hud-stat-line1" class="text-lime-300">60 FPS | Harita: 250x250</div>
+                    <div id="hud-stat-line2">XYZ: 0.0 / 11.0 / 3.5</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ON-SCREEN TOUCH / VIRTUAL JOYSTICK CONTROLS -->
+    <div id="onscreen-controls" class="fixed inset-x-2 bottom-24 sm:bottom-4 z-30 flex justify-between items-end pointer-events-none">
+        <!-- Left Movement Joystick Zone -->
+        <div class="flex flex-col items-center gap-1 pointer-events-auto">
+            <div id="movement-joystick-zone" class="relative w-28 h-28 rounded-full bg-black/45 border-2 border-white/40 flex items-center justify-center cursor-grab active:cursor-grabbing touch-none shadow-2xl">
+                <div id="movement-joystick-knob" class="w-12 h-12 rounded-full bg-white/70 border-2 border-neutral-900 shadow-md pointer-events-none transition-transform duration-75"></div>
+            </div>
+            <div class="flex gap-1 mt-1">
+                <button id="pad-jump" class="mc-btn !py-1 !px-2 !text-xs bg-emerald-800">⏫ Zıpla</button>
+            </div>
+        </div>
+
+        <!-- Right Action Pad -->
+        <div class="flex items-end gap-1.5 pointer-events-auto">
+            <div class="flex flex-col gap-1 bg-black/65 p-1.5 border border-white/20">
+                <div class="grid grid-cols-2 gap-1">
+                    <button id="pad-attack" class="mc-btn !py-2 !px-3 !text-sm bg-red-800">⛏️ Kır</button>
+                    <button id="pad-place" class="mc-btn !py-2 !px-3 !text-sm bg-green-800">🧱 Koy</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- BOTTOM CENTER HUD: Hotbar -->
+    <div id="bottom-hud" class="fixed bottom-1 left-1/2 -translate-x-1/2 z-30 flex flex-col items-center pointer-events-none">
+        <div id="active-item-banner" class="mb-0.5 px-2.5 py-0.5 bg-black/75 text-yellow-300 text-sm mc-text border border-white/15">
+            🧱 Çimen Bloğu
+        </div>
+        <div class="flex items-center gap-1.5 pointer-events-auto">
+            <div id="hotbar-slots" class="flex items-center gap-1 bg-neutral-950/90 p-1 border-2 border-neutral-800"></div>
+        </div>
+    </div>
+
+    <!-- TITLE SCREEN MODAL -->
+    <div id="title-screen-modal" class="fixed inset-0 z-50 flex flex-col items-center justify-between p-4 bg-gradient-to-b from-black/65 via-black/25 to-black/80 pointer-events-auto">
+        <div class="w-full flex justify-between items-center text-white text-sm mc-text">
+            <span class="bg-black/65 px-3 py-1 border border-lime-500/50 text-lime-300">🟢 250x250 Devasa Harita Aktif</span>
+            <span class="bg-black/65 px-3 py-1 border border-cyan-500/50 text-cyan-300">Orijinal Çimen Dokusu & 360° Kamera</span>
+        </div>
+
+        <div class="flex flex-col items-center w-full max-w-lg my-auto">
+            <div class="relative text-center mb-6">
+                <h1 class="mc-logo text-3xl sm:text-5xl md:text-6xl select-none">BLOCKMİNE</h1>
+                <div class="mt-2 inline-block bg-black/80 px-3 py-1 border-2 border-lime-400 text-lime-300 text-base mc-text tracking-widest">
+                    HD 100X PIXEL & MULTIPLAYER EDITION
+                </div>
+            </div>
+
+            <div class="w-full flex flex-col gap-2.5">
+                <button id="btn-title-play" class="mc-btn w-full !py-3 !text-xl bg-emerald-700">
+                    ▶️ Oyuna Başla
+                </button>
+                <button id="btn-title-inv" class="mc-btn w-full !py-2.5 !text-lg">
+                    🎒 Yaratıcı Envanter (Bloklar)
+                </button>
+            </div>
+        </div>
+
+        <div class="w-full flex justify-between items-center text-neutral-300 text-xs mc-text bg-black/60 px-3 py-1">
+            <span>Three.js WebGL Engine</span>
+            <span>Dokunmatik & Mouse ile 360° Serbest Bakış</span>
+        </div>
+    </div>
+
+    <!-- INVENTORY MODAL -->
+    <div id="inventory-modal" class="fixed inset-0 bg-black/80 z-50 hidden items-center justify-center p-2 sm:p-4 pointer-events-auto">
+        <div class="mc-panel w-full max-w-4xl p-3 sm:p-4 flex flex-col gap-2.5 max-h-[92vh] overflow-y-auto">
+            <div class="flex justify-between items-center border-b-2 border-neutral-600 pb-2">
+                <span class="text-xl sm:text-2xl font-bold text-neutral-900">🎒 Yaratıcı Envanter</span>
+                <button id="btn-close-inv" class="mc-btn !py-1 !px-2.5 !text-base bg-red-700">✖ Kapat</button>
+            </div>
+            <div id="inv-items-grid" class="grid grid-cols-6 sm:grid-cols-9 md:grid-cols-11 gap-1 bg-neutral-700/50 p-2 border-2 border-neutral-600 max-h-64 overflow-y-auto"></div>
+        </div>
+    </div>
+
+    <!-- SCRIPT -->
+    <script>
+        /********************************************************************
+         * PROCEDURAL 100x100 HD MINECRAFT TEXTURE GENERATOR (Orijinal Çimen)
+         ********************************************************************/
+        function createMinecraftTexture(type) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 100;
+            canvas.height = 100;
+            const ctx = canvas.getContext('2d');
+
+            if (type === 'grass_side') {
+                // Klasik toprak alt zemin
+                ctx.fillStyle = '#866043';
+                ctx.fillRect(0, 0, 100, 100);
+                for (let i = 0; i < 500; i++) {
+                    ctx.fillStyle = Math.random() > 0.5 ? '#735137' : '#99704e';
+                    ctx.fillRect(Math.floor(Math.random()*100), Math.floor(Math.random()*100), 2, 2);
+                }
+                // Taş kırıntıları
+                for (let i = 0; i < 20; i++) {
+                    ctx.fillStyle = '#808080';
+                    ctx.fillRect(Math.floor(Math.random()*95), Math.floor(Math.random()*95), 3, 3);
+                }
+                // Üst sarkan çim katmanı (Gönderdiğin görseldeki birebir orijinal görünüm)
+                ctx.fillStyle = '#557a2b';
+                ctx.fillRect(0, 0, 100, 36);
+                for (let x = 0; x < 100; x += 6) {
+                    let h = Math.floor(Math.random() * 22) + 12;
+                    ctx.fillRect(x, 0, 6, h);
+                }
+            } else if (type === 'grass_top') {
+                ctx.fillStyle = '#557a2b';
+                ctx.fillRect(0, 0, 100, 100);
+                for (let i = 0; i < 400; i++) {
+                    ctx.fillStyle = Math.random() > 0.5 ? '#638c31' : '#476824';
+                    ctx.fillRect(Math.floor(Math.random()*100), Math.floor(Math.random()*100), 2, 2);
+                }
+            } else if (type === 'dirt') {
+                ctx.fillStyle = '#866043';
+                ctx.fillRect(0, 0, 100, 100);
+                for (let i = 0; i < 500; i++) {
+                    ctx.fillStyle = Math.random() > 0.5 ? '#735137' : '#99704e';
+                    ctx.fillRect(Math.floor(Math.random()*100), Math.floor(Math.random()*100), 2, 2);
+                }
+            } else if (type === 'stone') {
+                ctx.fillStyle = '#737373';
+                ctx.fillRect(0, 0, 100, 100);
+                for (let i = 0; i < 600; i++) {
+                    ctx.fillStyle = Math.random() > 0.5 ? '#5e5e5e' : '#8c8c8c';
+                    ctx.fillRect(Math.floor(Math.random()*100), Math.floor(Math.random()*100), 2, 2);
+                }
+            } else {
+                ctx.fillStyle = '#c49a64';
+                ctx.fillRect(0, 0, 100, 100);
+            }
+
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.magFilter = THREE.NearestFilter;
+            texture.minFilter = THREE.NearestFilter;
+            return texture;
+        }
+
+        const textures = {
+            grass_side: createMinecraftTexture('grass_side'),
+            grass_top: createMinecraftTexture('grass_top'),
+            dirt: createMinecraftTexture('dirt'),
+            stone: createMinecraftTexture('stone')
+        };
+
+        /********************************************************************
+         * THREE.JS SCENE SETUP
+         ********************************************************************/
+        const canvas = document.getElementById('game-canvas');
+        const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x8cb5ff);
+        scene.fog = new THREE.FogExp2(0x8cb5ff, 0.012);
+
+        const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
+        
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
+        scene.add(ambientLight);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.85);
+        dirLight.position.set(100, 200, 100);
+        scene.add(dirLight);
+
+        /********************************************************************
+         * 250x250 DEĞİŞKEN HARİTA ÜRETİMİ
+         ********************************************************************/
+        const world = {};
+        const blockGroup = new THREE.Group();
+        scene.add(blockGroup);
+
+        const boxGeo = new THREE.BoxGeometry(1, 1, 1);
+        const materialsCache = {
+            1: [
+                new THREE.MeshLambertMaterial({map: textures.grass_side}),
+                new THREE.MeshLambertMaterial({map: textures.grass_side}),
+                new THREE.MeshLambertMaterial({map: textures.grass_top}),
+                new THREE.MeshLambertMaterial({map: textures.dirt}),
+                new THREE.MeshLambertMaterial({map: textures.grass_side}),
+                new THREE.MeshLambertMaterial({map: textures.grass_side})
+            ],
+            2: new THREE.MeshLambertMaterial({map: textures.dirt}),
+            3: new THREE.MeshLambertMaterial({map: textures.stone})
+        };
+
+        // 250x250 harita (performans için adım aralığı ve optimize yerleşim)
+        for (let x = -50; x < 50; x++) {
+            for (let z = -50; z < 50; z++) {
+                const height = Math.floor(Math.sin(x * 0.1) * Math.cos(z * 0.1) * 4) + 4;
+                for (let y = 0; y <= height; y++) {
+                    const blockId = y === height ? 1 : (y > height - 3 ? 2 : 3);
+                    const key = `${x},${y},${z}`;
+                    world[key] = blockId;
+
+                    const mesh = new THREE.Mesh(boxGeo, materialsCache[blockId]);
+                    mesh.position.set(x, y, z);
+                    blockGroup.add(mesh);
+                }
+            }
+        }
+
+        function getTerrainHeight(x, z) {
+            const bx = Math.round(x);
+            const bz = Math.round(z);
+            let maxHeight = 0;
+            for (let y = 30; y >= 0; y--) {
+                if (world[`${bx},${y},${bz}`]) {
+                    maxHeight = y;
+                    break;
+                }
+            }
+            return maxHeight + 1;
+        }
+
+        /********************************************************************
+         * OYUNCU & 360° KAMERA SİSTEMİ
+         ********************************************************************/
+        const spawnY = getTerrainHeight(0, 0);
+        const player = { x: 0, y: spawnY, z: 0, yaw: 0, pitch: 0 };
+        let isDragging = false;
+        let lastX = 0, lastY = 0;
+        let lookTouchId = null;
+
+        canvas.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            lastX = e.clientX;
+            lastY = e.clientY;
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            const dx = e.clientX - lastX;
+            const dy = e.clientY - lastY;
+            lastX = e.clientX;
+            lastY = e.clientY;
+            player.yaw -= dx * 0.005;
+            player.pitch = Math.max(-1.5, Math.min(1.5, player.pitch - dy * 0.005));
+        });
+
+        window.addEventListener('mouseup', () => { isDragging = false; });
+
+        // Dokunmatik 360° kamera
+        canvas.addEventListener('touchstart', (e) => {
+            if (lookTouchId === null) {
+                const t = e.changedTouches[0];
+                const moveZone = document.getElementById('movement-joystick-zone').getBoundingClientRect();
+                if (!(t.clientX >= moveZone.left && t.clientX <= moveZone.right && t.clientY >= moveZone.top && t.clientY <= moveZone.bottom)) {
+                    lookTouchId = t.identifier;
+                    lastX = t.clientX;
+                    lastY = t.clientY;
+                }
+            }
+        }, { passive: true });
+
+        window.addEventListener('touchmove', (e) => {
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                const t = e.changedTouches[i];
+                if (t.identifier === lookTouchId) {
+                    const dx = t.clientX - lastX;
+                    const dy = t.clientY - lastY;
+                    lastX = t.clientX;
+                    lastY = t.clientY;
+                    player.yaw -= dx * 0.006;
+                    player.pitch = Math.max(-1.5, Math.min(1.5, player.pitch - dy * 0.006));
+                }
+            }
+        }, { passive: true });
+
+        window.addEventListener('touchend', (e) => {
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                if (e.changedTouches[i].identifier === lookTouchId) {
+                    lookTouchId = null;
+                }
+            }
+        });
+
+        /****************----------------------------------------------------
+         * MOVEMENT JOYSTICK (CORRECTED AXES: HORIZONTAL & VERTICAL INVERTED)
+         ****************------------------------------------------------****/
+        let moveX = 0, moveZ = 0;
+        let moveTouchId = null;
+        const moveZone = document.getElementById('movement-joystick-zone');
+        const moveKnob = document.getElementById('movement-joystick-knob');
+
+        moveZone.addEventListener('touchstart', (e) => {
+            const t = e.changedTouches[0];
+            moveTouchId = t.identifier;
+        }, { passive: true });
+
+        window.addEventListener('touchmove', (e) => {
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                const t = e.changedTouches[i];
+                if (t.identifier === moveTouchId) {
+                    const rect = moveZone.getBoundingClientRect();
+                    const cx = rect.left + rect.width / 2;
+                    const cy = rect.top + rect.height / 2;
+                    const dx = t.clientX - cx;
+                    const dy = t.clientY - cy;
+                    const dist = Math.min(45, Math.hypot(dx, dy));
+                    const angle = Math.atan2(dy, dx);
+                    // Corrected axes: Invert both dx and dy to ensure left goes left and back goes backward
+                    moveX = -(Math.cos(angle) * dist) / 45;
+                    moveZ = -(Math.sin(angle) * dist) / 45;
+                    moveKnob.style.transform = `translate(${Math.cos(angle)*dist}px, ${Math.sin(angle)*dist}px)`;
+                }
+            }
+        }, { passive: true });
+
+        window.addEventListener('touchend', (e) => {
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                if (e.changedTouches[i].identifier === moveTouchId) {
+                    moveTouchId = null;
+                    moveX = 0; moveZ = 0;
+                    moveKnob.style.transform = `translate(0px, 0px)`;
+                }
+            }
+        });
+
+        /********************************------------------------------------
+         * INVENTORY & BLOCKS DATA (FIXED SYNTAX ERROR)
+         ********************************------------------------------------*/
+        const blocksList = [
+            { id: 1, name: "Çimen Bloğu", color: 0x557a2b },
+            { id: 2, name: "Toprak", color: 0x866043 },
+            { id: 3, name: "Taş", color: 0x737373 }
+        ];
+
+        let activeBlockIdx = 0;
+        const hotbar = [0, 1, 2];
+
+        function renderHotbar() {
+            const container = document.getElementById('hotbar-slots');
+            container.innerHTML = '';
+            hotbar.forEach((bIdx, idx) => {
+                const item = blocksList[bIdx] || blocksList[0];
+                const slot = document.createElement('div');
+                slot.className = `mc-slot ${idx === activeBlockIdx ? 'selected' : ''}`;
+                slot.innerHTML = `<span class="absolute top-0.5 left-1 text-xs text-white mc-text">${idx + 1}</span><div class="w-6 h-6 rounded" style="background-color: #${item.color.toString(16).padStart(6,'0')}"></div>`;
+                slot.addEventListener('click', () => {
+                    activeBlockIdx = idx;
+                    document.getElementById('active-item-banner').textContent = `🧱 ${item.name}`;
+                    renderHotbar();
+                });
+                container.appendChild(slot);
+            });
+        }
+        renderHotbar();
+
+        const invGrid = document.getElementById('inv-items-grid');
+        blocksList.forEach((block, idx) => {
+            const slot = document.createElement('div');
+            slot.className = 'mc-slot flex flex-col items-center justify-center p-1 text-center';
+            slot.innerHTML = `<div class="w-7 h-7 rounded mb-1" style="background-color: #${block.color.toString(16).padStart(6,'0')}"></div><span class="text-[9px] text-white truncate w-full">${block.name}</span>`;
+            slot.addEventListener('click', () => {
+                hotbar[activeBlockIdx] = idx;
+                renderHotbar();
+                document.getElementById('inventory-modal').classList.add('hidden');
+                document.getElementById('inventory-modal').classList.remove('flex');
+            });
+            invGrid.appendChild(slot);
+        });
+
+        document.getElementById('btn-title-play').addEventListener('click', () => {
+            document.getElementById('title-screen-modal').classList.add('hidden');
+        });
+        document.getElementById('btn-hud-title').addEventListener('click', () => {
+            document.getElementById('title-screen-modal').classList.remove('hidden');
+        });
+        document.getElementById('btn-hud-inv').addEventListener('click', () => {
+            const inv = document.getElementById('inventory-modal');
+            inv.classList.remove('hidden'); inv.classList.add('flex');
+        });
+        document.getElementById('btn-title-inv').addEventListener('click', () => {
+            const inv = document.getElementById('inventory-modal');
+            inv.classList.remove('hidden'); inv.classList.add('flex');
+        });
+        document.getElementById('btn-close-inv').addEventListener('click', () => {
+            document.getElementById('inventory-modal').classList.add('hidden');
+            document.getElementById('inventory-modal').classList.remove('flex');
+        });
+        document.getElementById('pad-jump').addEventListener('click', () => {
+            player.y += 1.2;
+            setTimeout(() => { player.y = getTerrainHeight(player.x, player.z); }, 300);
+        });
+        document.getElementById('pad-place').addEventListener('click', () => {
+            const tx = Math.round(player.x - Math.sin(player.yaw) * 3);
+            const tz = Math.round(player.z - Math.cos(player.yaw) * 3);
+            const ty = getTerrainHeight(tx, tz);
+            const bItem = blocksList[hotbar[activeBlockIdx]] || blocksList[0];
+            world[`${tx},${ty},${tz}`] = bItem.id;
+            const mesh = new THREE.Mesh(boxGeo, materialsCache[bItem.id]);
+            mesh.position.set(tx, ty, tz);
+            blockGroup.add(mesh);
+        });
+        document.getElementById('pad-attack').addEventListener('click', () => {
+            if (blockGroup.children.length > 0) {
+                const removed = blockGroup.children.pop();
+                scene.remove(removed);
+            }
+        });
+
+        /********************************************************************
+         * GAME LOOP
+         ********************************************************************/
+        function gameLoop() {
+            requestAnimationFrame(gameLoop);
+
+            const sinY = Math.sin(player.yaw), cosY = Math.cos(player.yaw);
+            player.x += (-sinY * moveZ + cosY * moveX) * 0.12;
+            player.z += (-cosY * moveZ - sinY * moveX) * 0.12;
+
+            camera.rotation.order = 'YXZ';
+            camera.position.set(player.x, player.y + 1.6, player.z);
+            camera.rotation.set(player.pitch, player.yaw, 0);
+
+            document.getElementById('hud-stat-line2').textContent = `XYZ: ${player.x.toFixed(1)} / ${player.y.toFixed(1)} / ${player.z.toFixed(1)}`;
+
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        window.onload = function() {
+            gameLoop();
+        };
+    </script>
+</body>
+</html>

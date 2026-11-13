@@ -1,0 +1,6 @@
+{
+  "name": "BlockMine",
+  "description": "3D voxel sandbox game with online multiplayer servers, friend list, structural templates, daily quests, global leaderboard, customizable skins, and multi-language support.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
