@@ -90,6 +90,7 @@ fun BlockMineGameScreen(
     val tutorialStep by viewModel.tutorialStep.collectAsStateWithLifecycle()
     val statusBanner by viewModel.statusBannerMessage.collectAsStateWithLifecycle()
     val fpsHistory by viewModel.fpsHistory.collectAsStateWithLifecycle()
+    var useEmbeddedWebHtml by remember { androidx.compose.runtime.mutableStateOf(true) }
 
     BackHandler(enabled = activeModal != ActiveModal.NONE) {
         if (activeModal == ActiveModal.TITLE_SCREEN) {
@@ -99,21 +100,92 @@ fun BlockMineGameScreen(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        // 1. 3D Voxel World Fullscreen Canvas
-        VoxelWorldCanvas(
-            worldBlocks = worldBlocks,
-            playerX = playerX,
-            playerY = playerY,
-            playerZ = playerZ,
-            playerYaw = playerYaw,
-            playerPitch = playerPitch,
-            targetedRaycast = targetedRaycast,
-            onlinePeers = onlinePeers,
-            graphicsConfig = graphicsConfig,
-            onRotateCamera = { dyaw, dpitch -> viewModel.rotateCamera(dyaw, dpitch) },
-            onCanvasTapAction = { viewModel.placeSelectedBlock() }
-        )
+    Column(modifier = Modifier.fillMaxSize().background(Color(0xFF070B12))) {
+        // Website Browser URL Bar (https://blockmine.online)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .windowInsetsPadding(WindowInsets.safeDrawing)
+                .background(Color(0xFF0B132B))
+                .padding(horizontal = 10.dp, vertical = 6.dp)
+                .testTag("website_url_bar"),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .background(Color(0xFF1E293B), RoundedCornerShape(20.dp))
+                    .border(1.dp, Color(0xFF5EBD3E), RoundedCornerShape(20.dp))
+                    .padding(horizontal = 12.dp, vertical = 5.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .background(Color(0xFF5EBD3E), CircleShape)
+                )
+                Text(
+                    text = "🔒 https://blockmine.online/3d-multiplayer-web",
+                    color = Color(0xFFA7F3D0),
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1
+                )
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(if (useEmbeddedWebHtml) Color(0xFF0284C7) else Color(0xFF10B981))
+                    .clickable { useEmbeddedWebHtml = !useEmbeddedWebHtml }
+                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                    .testTag("btn_toggle_web_engine")
+            ) {
+                Text(
+                    text = if (useEmbeddedWebHtml) "🌐 Three.js HTML5 Aktif" else "⚡ 3B Web Portal Aktif",
+                    color = Color.White,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.ExtraBold
+                )
+            }
+        }
+
+        if (useEmbeddedWebHtml) {
+            androidx.compose.ui.viewinterop.AndroidView(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .testTag("blockmine_webview"),
+                factory = { ctx ->
+                    android.webkit.WebView(ctx).apply {
+                        settings.javaScriptEnabled = true
+                        settings.domStorageEnabled = true
+                        settings.mediaPlaybackRequiresUserGesture = false
+                        webChromeClient = android.webkit.WebChromeClient()
+                        webViewClient = android.webkit.WebViewClient()
+                        loadUrl("file:///android_asset/index.html")
+                    }
+                }
+            )
+        } else {
+            Box(modifier = Modifier.fillMaxSize()) {
+                // 1. 3D Voxel World Fullscreen Canvas
+                VoxelWorldCanvas(
+                    worldBlocks = worldBlocks,
+                    playerX = playerX,
+                    playerY = playerY,
+                    playerZ = playerZ,
+                    playerYaw = playerYaw,
+                    playerPitch = playerPitch,
+                    targetedRaycast = targetedRaycast,
+                    onlinePeers = onlinePeers,
+                    graphicsConfig = graphicsConfig,
+                    onRotateCamera = { dyaw, dpitch -> viewModel.rotateCamera(dyaw, dpitch) },
+                    onCanvasTapAction = { viewModel.placeSelectedBlock() }
+                )
 
         // 2. Center Crosshair & Targeted Block Indicator
         Box(
@@ -544,6 +616,8 @@ fun BlockMineGameScreen(
                     onSendMessage = { viewModel.sendChatMessage(it) },
                     onClose = { viewModel.closeModal() }
                 )
+            }
+        }
             }
         }
     }
