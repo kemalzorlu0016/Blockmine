@@ -1,5 +1,16 @@
 package com.example.ui
 
+import android.content.ActivityNotFoundException
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.Handler
+import android.os.Looper
+import android.view.View
+import android.webkit.JavascriptInterface
+import android.webkit.WebChromeClient
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -25,6 +36,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
@@ -33,10 +45,14 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -49,14 +65,92 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.ai.GeminiBlueprintUiState
+import com.example.ai.GeminiChatUiState
 import com.example.data.BlockCatalog
+import com.example.data.StructureTemplate
+import org.json.JSONArray
+import org.json.JSONObject
 import java.util.Locale
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.hypot
 import kotlin.math.roundToInt
 import kotlin.math.sin
+
+private class BlockMineWebBridge(
+    private val context: Context,
+    private val viewModel: BlockMineViewModel,
+    private val onSignOut: () -> Unit,
+    private val mainHandler: Handler = Handler(Looper.getMainLooper())
+) {
+    @JavascriptInterface
+    fun generateBlueprint(prompt: String) {
+        mainHandler.post {
+            viewModel.generateAiBlueprint(prompt)
+        }
+    }
+
+    @JavascriptInterface
+    fun askAssistant(prompt: String) {
+        mainHandler.post {
+            viewModel.askGeminiAssistant(prompt)
+        }
+    }
+
+    @JavascriptInterface
+    fun signOut() {
+        mainHandler.post {
+            onSignOut()
+        }
+    }
+
+    @JavascriptInterface
+    fun openPlayStore() {
+        mainHandler.post {
+            val pkg = context.packageName
+            val marketIntent = Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$pkg")).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            val webIntent = Intent(
+                Intent.ACTION_VIEW,
+                Uri.parse("https://play.google.com/store/apps/details?id=$pkg")
+            ).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            try {
+                context.startActivity(marketIntent)
+            } catch (_: ActivityNotFoundException) {
+                runCatching { context.startActivity(webIntent) }
+            }
+        }
+    }
+}
+
+private fun StructureTemplate.toWebJson(): String {
+    val placementsJson = JSONArray().apply {
+        placements.forEach { p ->
+            put(
+                JSONObject().apply {
+                    put("dx", p.dx)
+                    put("dy", p.dy)
+                    put("dz", p.dz)
+                    put("blockId", p.blockId)
+                }
+            )
+        }
+    }
+    return JSONObject().apply {
+        put("id", id)
+        put("name", nameTr)
+        put("description", descriptionTr)
+        put("iconEmoji", iconEmoji)
+        put("rewardXp", rewardXp)
+        put("placements", placementsJson)
+    }.toString()
+}
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -90,83 +184,112 @@ fun BlockMineGameScreen(
     val tutorialStep by viewModel.tutorialStep.collectAsStateWithLifecycle()
     val statusBanner by viewModel.statusBannerMessage.collectAsStateWithLifecycle()
     val fpsHistory by viewModel.fpsHistory.collectAsStateWithLifecycle()
-    var useEmbeddedWebHtml by remember { androidx.compose.runtime.mutableStateOf(true) }
+    val geminiChatState by viewModel.geminiChatState.collectAsStateWithLifecycle()
+    val geminiChatHistory by viewModel.geminiChatHistory.collectAsStateWithLifecycle()
+    val geminiBlueprintState by viewModel.geminiBlueprintState.collectAsStateWithLifecycle()
+    val useEmbeddedWebHtml = true
+    var webViewRef by remember { mutableStateOf<WebView?>(null) }
+    var isWebPageLoaded by remember { mutableStateOf(false) }
 
-    BackHandler(enabled = activeModal != ActiveModal.NONE) {
-        if (activeModal == ActiveModal.TITLE_SCREEN) {
+    LaunchedEffect(isWebPageLoaded, profile) {
+        if (isWebPageLoaded) {
+            val safeName = JSONObject.quote(profile.username)
+            webViewRef?.evaluateJavascript(
+                "window.syncNativeProfile && window.syncNativeProfile($safeName, ${profile.level}, ${profile.xp}, ${profile.coins}, ${profile.gems});",
+                null
+            )
+        }
+    }
+
+    LaunchedEffect(isWebPageLoaded, geminiChatState) {
+        if (!isWebPageLoaded) return@LaunchedEffect
+        when (val st = geminiChatState) {
+            GeminiChatUiState.Loading -> webViewRef?.evaluateJavascript(
+                "window.onNativeGeminiChatUpdate && window.onNativeGeminiChatUpdate('loading', '');",
+                null
+            )
+            is GeminiChatUiState.Streaming -> webViewRef?.evaluateJavascript(
+                "window.onNativeGeminiChatUpdate && window.onNativeGeminiChatUpdate('streaming', ${JSONObject.quote(st.text)});",
+                null
+            )
+            is GeminiChatUiState.Success -> webViewRef?.evaluateJavascript(
+                "window.onNativeGeminiChatUpdate && window.onNativeGeminiChatUpdate('success', ${JSONObject.quote(st.text)});",
+                null
+            )
+            is GeminiChatUiState.Error -> webViewRef?.evaluateJavascript(
+                "window.onNativeGeminiChatUpdate && window.onNativeGeminiChatUpdate('error', ${JSONObject.quote(st.message)});",
+                null
+            )
+            GeminiChatUiState.Idle -> Unit
+        }
+    }
+
+    LaunchedEffect(isWebPageLoaded, geminiBlueprintState) {
+        if (!isWebPageLoaded) return@LaunchedEffect
+        when (val bp = geminiBlueprintState) {
+            GeminiBlueprintUiState.Loading -> webViewRef?.evaluateJavascript(
+                "window.onNativeGeminiBlueprint && window.onNativeGeminiBlueprint('loading', null);",
+                null
+            )
+            is GeminiBlueprintUiState.Success -> webViewRef?.evaluateJavascript(
+                "window.onNativeGeminiBlueprint && window.onNativeGeminiBlueprint('success', ${bp.template.toWebJson()});",
+                null
+            )
+            is GeminiBlueprintUiState.Error -> webViewRef?.evaluateJavascript(
+                "window.onNativeGeminiBlueprint && window.onNativeGeminiBlueprint('error', ${JSONObject.quote(bp.message)});",
+                null
+            )
+            GeminiBlueprintUiState.Idle -> Unit
+        }
+    }
+
+    BackHandler(enabled = activeModal != ActiveModal.NONE || webViewRef?.canGoBack() == true) {
+        if (activeModal != ActiveModal.NONE && (activeModal == ActiveModal.TITLE_SCREEN || useEmbeddedWebHtml)) {
             viewModel.closeModal()
+        } else if (webViewRef?.canGoBack() == true) {
+            webViewRef?.goBack()
         } else {
             viewModel.openModal(ActiveModal.TITLE_SCREEN)
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(Color(0xFF070B12))) {
-        // Website Browser URL Bar (https://blockmine.online)
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .windowInsetsPadding(WindowInsets.safeDrawing)
-                .background(Color(0xFF0B132B))
-                .padding(horizontal = 10.dp, vertical = 6.dp)
-                .testTag("website_url_bar"),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(
-                modifier = Modifier
-                    .weight(1f)
-                    .background(Color(0xFF1E293B), RoundedCornerShape(20.dp))
-                    .border(1.dp, Color(0xFF5EBD3E), RoundedCornerShape(20.dp))
-                    .padding(horizontal = 12.dp, vertical = 5.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(8.dp)
-                        .background(Color(0xFF5EBD3E), CircleShape)
-                )
-                Text(
-                    text = "🔒 https://blockmine.online/3d-multiplayer-web",
-                    color = Color(0xFFA7F3D0),
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1
-                )
-            }
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(if (useEmbeddedWebHtml) Color(0xFF0284C7) else Color(0xFF10B981))
-                    .clickable { useEmbeddedWebHtml = !useEmbeddedWebHtml }
-                    .padding(horizontal = 10.dp, vertical = 6.dp)
-                    .testTag("btn_toggle_web_engine")
-            ) {
-                Text(
-                    text = if (useEmbeddedWebHtml) "🌐 Three.js HTML5 Aktif" else "⚡ 3B Web Portal Aktif",
-                    color = Color.White,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.ExtraBold
-                )
-            }
-        }
-
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF070B12))
+            .statusBarsPadding()
+            .navigationBarsPadding()
+    ) {
+    Column(modifier = Modifier.fillMaxSize()) {
         if (useEmbeddedWebHtml) {
-            androidx.compose.ui.viewinterop.AndroidView(
+            val hostContext = LocalContext.current
+            DisposableEffect(Unit) {
+                onDispose {
+                    webViewRef?.stopLoading()
+                    webViewRef?.destroy()
+                    webViewRef = null
+                }
+            }
+            AndroidView(
                 modifier = Modifier
                     .fillMaxSize()
                     .testTag("blockmine_webview"),
                 factory = { ctx ->
-                    android.webkit.WebView(ctx).apply {
+                    WebView(ctx).apply {
+                        setLayerType(View.LAYER_TYPE_HARDWARE, null)
                         settings.javaScriptEnabled = true
                         settings.domStorageEnabled = true
                         settings.mediaPlaybackRequiresUserGesture = false
-                        webChromeClient = android.webkit.WebChromeClient()
-                        webViewClient = android.webkit.WebViewClient()
+                        addJavascriptInterface(BlockMineWebBridge(hostContext, viewModel, onSignOut), "BlockMineNative")
+                        webChromeClient = WebChromeClient()
+                        webViewClient = object : WebViewClient() {
+                            override fun onPageFinished(view: WebView?, url: String?) {
+                                super.onPageFinished(view, url)
+                                isWebPageLoaded = true
+                            }
+                        }
                         loadUrl("file:///android_asset/index.html")
+                        webViewRef = this
                     }
                 }
             )
@@ -290,6 +413,12 @@ fun BlockMineGameScreen(
                     bgColor = Color(0xFF334155),
                     tag = "btn_hud_settings",
                     onClick = { viewModel.openModal(ActiveModal.GRAPHICS_SETTINGS) }
+                )
+                HudPillButton(
+                    text = "✨ Gemini AI",
+                    bgColor = Color(0xFF7C3AED),
+                    tag = "btn_hud_gemini_ai",
+                    onClick = { viewModel.openModal(ActiveModal.GEMINI_AI) }
                 )
             }
 
@@ -617,8 +746,31 @@ fun BlockMineGameScreen(
                     onClose = { viewModel.closeModal() }
                 )
             }
+            ActiveModal.GEMINI_AI -> Unit // Rendered in top-level Box so it works over both WebView and 3B Canvas
         }
             }
+        }
+    }
+
+        if (activeModal == ActiveModal.GEMINI_AI) {
+            GeminiAiArchitectModal(
+                language = lang,
+                chatState = geminiChatState,
+                chatHistory = geminiChatHistory,
+                blueprintState = geminiBlueprintState,
+                onAskAssistant = { viewModel.askGeminiAssistant(it) },
+                onGenerateBlueprint = { viewModel.generateAiBlueprint(it) },
+                onBuildBlueprintInWorld = { template ->
+                    viewModel.buildGeneratedAiBlueprint(template)
+                    if (useEmbeddedWebHtml) {
+                        webViewRef?.evaluateJavascript(
+                            "window.spawnNativeBlueprintPlacements && window.spawnNativeBlueprintPlacements(${template.toWebJson()});",
+                            null
+                        )
+                    }
+                },
+                onClose = { viewModel.closeModal() }
+            )
         }
     }
 }

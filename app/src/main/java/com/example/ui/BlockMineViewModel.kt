@@ -3,6 +3,10 @@ package com.example.ui
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.ai.GeminiArchitectService
+import com.example.ai.GeminiBlueprintUiState
+import com.example.ai.GeminiChatTurn
+import com.example.ai.GeminiChatUiState
 import com.example.audio.SoundEngine
 import com.example.data.AppLanguage
 import com.example.data.BlockCatalog
@@ -18,6 +22,7 @@ import com.example.data.StructureTemplate
 import com.example.data.UserProfile
 import com.google.firebase.firestore.FirebaseFirestoreException
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -29,6 +34,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
 import kotlin.math.cos
 import kotlin.math.floor
 import kotlin.math.roundToInt
@@ -69,7 +75,8 @@ enum class ActiveModal {
     GRAPHICS_SETTINGS,
     NOTIFICATIONS_PANEL,
     INTERACTIVE_TUTORIAL,
-    CHAT_DRAWER
+    CHAT_DRAWER,
+    GEMINI_AI
 }
 
 sealed interface UiState<out T> {
@@ -81,7 +88,8 @@ sealed interface UiState<out T> {
 class BlockMineViewModel(
     private val repository: BlockMineRepository,
     private val currentUserId: String,
-    initialDisplayName: String = "BlockMiner"
+    initialDisplayName: String = "BlockMiner",
+    private val geminiService: GeminiArchitectService = GeminiArchitectService()
 ) : ViewModel() {
 
     private val _activeModal = MutableStateFlow(ActiveModal.TITLE_SCREEN)
@@ -331,11 +339,20 @@ class BlockMineViewModel(
     private val _fpsHistory = MutableStateFlow(listOf(60, 60, 59, 60, 60, 60, 59, 60, 60, 60, 60, 60))
     val fpsHistory: StateFlow<List<Int>> = _fpsHistory.asStateFlow()
 
+    // Gemini AI Architect & Assistant state
+    private val _geminiChatState = MutableStateFlow<GeminiChatUiState>(GeminiChatUiState.Idle)
+    val geminiChatState: StateFlow<GeminiChatUiState> = _geminiChatState.asStateFlow()
+
+    private val _geminiChatHistory = MutableStateFlow<List<GeminiChatTurn>>(emptyList())
+    val geminiChatHistory: StateFlow<List<GeminiChatTurn>> = _geminiChatHistory.asStateFlow()
+
+    private val _geminiBlueprintState = MutableStateFlow<GeminiBlueprintUiState>(GeminiBlueprintUiState.Idle)
+    val geminiBlueprintState: StateFlow<GeminiBlueprintUiState> = _geminiBlueprintState.asStateFlow()
+
     init {
         generateInitialTerrain()
         updateRaycastTarget()
         bootstrapCloudData()
-        startMultiplayerPeerSimulation()
     }
 
     private fun generateInitialTerrain() {
@@ -900,6 +917,87 @@ class BlockMineViewModel(
         viewModelScope.launch {
             repository.updateProfile(profileToSave)
         }
+    }
+
+    fun askGeminiAssistant(prompt: String) {
+        val clean = prompt.trim()
+        if (clean.isEmpty()) return
+        SoundEngine.playUiClick()
+        _geminiChatHistory.update { it + GeminiChatTurn(isUser = true, text = clean) }
+        _geminiChatState.value = GeminiChatUiState.Loading
+        val accumulatedText = StringBuilder()
+
+        viewModelScope.launch {
+            try {
+                withTimeout(60_000L) {
+                    geminiService.streamAssistantReply(
+                        userPrompt = clean,
+                        language = _language.value,
+                        worldBlockCount = _worldBlocks.value.size,
+                        playerLevel = _profile.value.level,
+                        activeServerName = _activeServerName.value
+                    ).collect { chunkText ->
+                        accumulatedText.append(chunkText)
+                        _geminiChatState.value = GeminiChatUiState.Streaming(accumulatedText.toString())
+                    }
+                }
+                val finalAnswer = accumulatedText.toString().trim()
+                if (finalAnswer.isNotEmpty()) {
+                    _geminiChatHistory.update { it + GeminiChatTurn(isUser = false, text = finalAnswer) }
+                    _geminiChatState.value = GeminiChatUiState.Success(finalAnswer)
+                } else {
+                    _geminiChatState.value = GeminiChatUiState.Error("Gemini boş bir yanıt döndürdü.")
+                }
+            } catch (e: TimeoutCancellationException) {
+                Log.e(TAG, "Gemini streaming timed out", e)
+                _geminiChatState.value = GeminiChatUiState.Error(
+                    "İstek 60 saniye içinde zaman aşımına uğradı. Lütfen tekrar deneyin."
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "Gemini assistant generation failed", e)
+                _geminiChatState.value = GeminiChatUiState.Error(
+                    e.localizedMessage ?: "Gemini yanıtı alınamadı."
+                )
+            }
+        }
+    }
+
+    fun generateAiBlueprint(prompt: String) {
+        val clean = prompt.trim()
+        if (clean.isEmpty()) return
+        SoundEngine.playUiClick()
+        _geminiBlueprintState.value = GeminiBlueprintUiState.Loading
+
+        viewModelScope.launch {
+            try {
+                val generatedTemplate = withTimeout(60_000L) {
+                    geminiService.generateStructureBlueprint(
+                        userPrompt = clean,
+                        language = _language.value
+                    )
+                }
+                _geminiBlueprintState.value = GeminiBlueprintUiState.Success(generatedTemplate)
+                SoundEngine.playRewardClaim()
+            } catch (e: TimeoutCancellationException) {
+                Log.e(TAG, "Gemini blueprint timed out", e)
+                _geminiBlueprintState.value = GeminiBlueprintUiState.Error(
+                    "3B yapı tasarımı 60 saniye içinde zaman aşımına uğradı."
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "Gemini blueprint generation failed", e)
+                _geminiBlueprintState.value = GeminiBlueprintUiState.Error(
+                    e.localizedMessage ?: "Gemini 3B yapı planı oluşturulamadı."
+                )
+            }
+        }
+    }
+
+    fun buildGeneratedAiBlueprint(template: StructureTemplate) {
+        buildStructureTemplate(template)
     }
 
     fun showBanner(msg: String) {

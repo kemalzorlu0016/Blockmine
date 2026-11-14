@@ -202,26 +202,68 @@ fun BlockMineAuthScreen(
         )
     }
 
-    Box(
+    Column(
         modifier = Modifier
             .fillMaxSize()
             .background(
                 Brush.verticalGradient(
                     colors = listOf(
+                        Color(0xFF070B12),
                         Color(0xFF0B132B),
-                        Color(0xFF1C2541),
                         Color(0xFF1B4332)
                     )
                 )
             )
             .windowInsetsPadding(WindowInsets.safeDrawing)
-            .padding(20.dp),
-        contentAlignment = Alignment.Center
     ) {
+        // Browser Chrome Top Bar (https://blockmine.online/giris)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Color(0xFF0F172A))
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .background(Color(0xFF1E293B), RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp))
+                    .border(1.dp, Color(0xFF5EBD3E), RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp))
+                    .padding(horizontal = 10.dp, vertical = 4.dp)
+            ) {
+                Text(
+                    text = "🌐 blockmine.online",
+                    color = Color(0xFF5EBD3E),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.ExtraBold
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .background(Color(0xFF1E293B), RoundedCornerShape(20.dp))
+                    .padding(horizontal = 12.dp, vertical = 5.dp)
+            ) {
+                Text(
+                    text = "🔒 https://blockmine.online/giris",
+                    color = Color(0xFFA7F3D0),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1
+                )
+            }
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(20.dp),
+            contentAlignment = Alignment.Center
+        ) {
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .widthIn(max = 500.dp)
+                .widthIn(max = 520.dp)
                 .border(3.dp, Color(0xFF5EBD3E), RoundedCornerShape(20.dp)),
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = Color(0xEE111927))
@@ -237,7 +279,7 @@ fun BlockMineAuthScreen(
                         .padding(horizontal = 14.dp, vertical = 6.dp)
                 ) {
                     Text(
-                        text = "100X HD VOXEL & MULTIPLAYER",
+                        text = "WEBGL 100X HD • ONLINE WEB PORTALI",
                         color = Color(0xFF081C15),
                         fontWeight = FontWeight.ExtraBold,
                         fontSize = 12.sp
@@ -245,17 +287,17 @@ fun BlockMineAuthScreen(
                 }
 
                 Text(
-                    text = "BLOCKMİNE",
-                    fontSize = 38.sp,
+                    text = "BLOCKMİNE.ONLINE",
+                    fontSize = 32.sp,
                     fontWeight = FontWeight.Black,
                     fontFamily = FontFamily.Monospace,
                     color = Color(0xFFE9F5DB),
-                    letterSpacing = 3.sp,
+                    letterSpacing = 2.sp,
                     modifier = Modifier.testTag("auth_blockmine_title")
                 )
 
                 Text(
-                    text = "Çevrimiçi Çok Oyunculu Sunucular, Arkadaş Listesi, Hazır Mimari Şablonlar, Küresel Liderlik Tablosu ve Bulut Profil Senkronizasyonu için Google hesabınızla bağlanın.",
+                    text = "Tarayıcı tabanlı 3B WebGL dünyasına, Gemini AI Yapı Mimarına, Çok Oyunculu Sunuculara ve Arkadaş Listesine bağlanmak için web portalına Google hesabınızla giriş yapın.",
                     color = Color(0xFFCBD5E1),
                     fontSize = 14.sp,
                     textAlign = TextAlign.Center
@@ -333,6 +375,7 @@ fun BlockMineAuthScreen(
                     }
                 }
             }
+        }
         }
     }
 }

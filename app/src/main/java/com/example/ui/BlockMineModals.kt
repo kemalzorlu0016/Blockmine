@@ -336,6 +336,14 @@ fun TitleScreenModal(
                     modifier = Modifier.weight(1f),
                     onClick = { onOpenModal(ActiveModal.NOTIFICATIONS_PANEL) }
                 )
+                MenuFeatureButton(
+                    title = "✨ Gemini AI Mimar",
+                    subtitle = "3B Yapı Üret & AI Rehber",
+                    accent = Color(0xFF8B5CF6),
+                    tag = "btn_open_gemini_ai",
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = { onOpenModal(ActiveModal.GEMINI_AI) }
+                )
             }
 
             Row(

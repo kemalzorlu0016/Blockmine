@@ -1,21 +1,18 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
-#
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
+# Google Play Release ProGuard / R8 Keep Rules for BlockMine
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# Preserve WebView JavascriptInterface bridge methods
+-keepattributes JavascriptInterface
+-keepclassmembers class com.example.ui.BlockMineWebBridge {
+    @android.webkit.JavascriptInterface <methods>;
+    public *;
+}
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+# Preserve Firestore @IgnoreExtraProperties data models
+-keepclassmembers class com.example.data.** {
+    *;
+}
+-keepattributes Signature,InnerClasses,EnclosingMethod
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# Preserve line numbers for Google Play Console crash symbolication
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile

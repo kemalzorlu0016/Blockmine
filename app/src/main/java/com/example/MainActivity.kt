@@ -1,6 +1,10 @@
 package com.example
 
+import android.content.Context
+import android.hardware.display.DisplayManager
+import android.os.Build
 import android.os.Bundle
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -17,6 +21,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.data.BlockMineRepository
+import com.example.data.configureAppCheck
 import com.example.ui.BlockMineAuthScreen
 import com.example.ui.BlockMineGameScreen
 import com.example.ui.BlockMineViewModel
@@ -42,12 +47,27 @@ internal fun FirebaseAuth.authStateFlow(): Flow<FirebaseUser?> = callbackFlow {
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        configureAppCheck(this, intent)
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        requestMaxDisplayRefreshRate()
         enableEdgeToEdge()
         setContent {
             MyApplicationTheme {
                 AppNavigation()
             }
         }
+    }
+
+    private fun requestMaxDisplayRefreshRate() {
+        val displayManager = getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager
+        val activeDisplay = displayManager?.getDisplay(android.view.Display.DEFAULT_DISPLAY) ?: return
+        val maxMode = activeDisplay.supportedModes.maxByOrNull { it.refreshRate } ?: return
+        val params = window.attributes
+        params.preferredDisplayModeId = maxMode.modeId
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            params.preferredRefreshRate = maxMode.refreshRate
+        }
+        window.attributes = params
     }
 }
 
